@@ -1,0 +1,55 @@
+body {
+/*
+   background: #2980b9;
+   color: white;
+*/
+}
+
+
+.list-group {
+   border-width: 1px 0;
+   margin-bottom: 20px;
+   padding-left: 0;
+}
+
+   .list-group-item:first-child  {
+       border-top-right-radius: 0;
+       border-top-left-radius: 0;
+   }
+
+   .list-group, .list-group-inverse, .list-group>li, .list-group-inverse>li {
+       border-width: 1px 0;
+   }
+
+   .list-group-item {
+       position: relative;
+       display: block;
+       margin-bottom: -1px;
+       background-color: transparent;
+       border: 1px solid #ddd;
+   }
+
+
+.list-group-item > button {
+   display: block;
+   padding: 15px 20px;
+   width: 100%;
+   text-align: left;
+   margin: 0;
+}
+
+.list-group-item > button:hover {
+   background: #eee;
+}
+
+.list-group-item > button.new {
+   color: darkgreen;
+}
+
+button.button-link {
+   border: none;
+   background: transparent;
+   height: inherit;
+   line-height: inherit;
+   border-radius: 0;
+}
