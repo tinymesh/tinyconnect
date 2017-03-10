@@ -1,6 +1,8 @@
-import { app, BrowserWindow } from 'electron';
-import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
-import { enableLiveReload } from 'electron-compile';
+import { app, BrowserWindow, ipcMain } from 'electron'
+import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer'
+import { enableLiveReload } from 'electron-compile'
+import processes from 'child_process'
+import _ from 'lodash'
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -57,5 +59,153 @@ app.on('activate', () => {
   }
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
+
+// Processes spawned in rendere are not killed when the application exists
+// Handle such communication in main thread instead to get them to exit
+ipcMain.on('async', (event, arg) => {
+    // Print 1
+    console.log(arg);
+    // Reply on async message from renderer process
+    event.sender.send('async-reply', 2);
+});
+
+let listPorts = () => {
+   const ports = processes
+                  .spawnSync('./tm-serial-adapter',
+                             ['-list'],
+                             {encoding: 'ascii'})
+
+   return ports.output[1].split(/[\r\n]/)
+                         .filter(buf => !!buf)
+}
+
+ipcMain.on('list', (event) => {
+   event.returnValue = listPorts()
+})
+
+let _ports = listPorts()
+setInterval(function() {
+   const
+      newports = listPorts(),
+      added = _.difference(newports, _ports),
+      removed = _.difference(_ports, newports)
+
+   _ports = newports
+
+   if (added.length > 0 || removed.length > 0) {
+      if (mainWindow)
+         mainWindow.webContents.send('port:list', {
+            ports: newports,
+            added,
+            removed
+         })
+   }
+}.bind(this), 1500)
+
+let children = {}
+let data = {}
+
+const spawn = (port) => {
+   let proc = processes.spawn('./tm-serial-adapter',
+                              [port],
+                              { encoding: 'ascii' }),
+       opened = false,
+       pid = null
+
+   if (!data[port])
+      data[port] = []
+
+   const onOpen = (proc) => {
+      if (opened)
+         return
+
+      pid = proc.pid
+
+      opened = true
+
+      if (mainWindow) {
+         mainWindow.webContents.send('port:open', {port: port,
+                                                   pid: proc.pid,
+                                                   data: data[port]})
+      }
+   }
+
+
+   proc.stdin.once('data', () => onOpen(proc))
+   proc.stderr.once('data', () => onOpen(proc))
+
+   proc.on('exit', (code, signal) => {
+      if (mainWindow)
+         mainWindow.webContents.send('port:close', {port: port,
+                                                    pid: pid,
+                                                    code: code})
+
+      delete children[port]
+      //delete data[port]
+   })
+
+   proc.on('error', (err) => {
+      console.log('some error occured!!!', err)
+      if (mainWindow)
+         mainWindow.webContents.send('port:error', {port: port,
+                                                    pid: proc.pid,
+                                                    error: err})
+   })
+
+   proc.stderr.on('data', (input) => {
+      data[port].push({data: input, fd: 'stderr'})
+
+      if (mainWindow)
+         mainWindow.webContents.send('port:data', {port: port,
+                                                   fd: 'stderr',
+                                                   pid: proc.pid,
+                                                   data: input})
+   })
+
+   proc.stdout.on('data', (input) => {
+      data[port].push({data: input, fd: 'stdout'})
+
+      if (mainWindow)
+         mainWindow.webContents.send('port:data', {port: port,
+                                                   fd: 'stdout',
+                                                   pid: proc.pid,
+                                                   data: input})
+   })
+
+   return proc
+}
+
+// async spawn serial adapter
+ipcMain.on('open', (event, port) => {
+   console.log('port:open: ' + port)
+
+   if (!children[port])
+      children[port] = spawn(port)
+
+    event.returnValue = children[port].pid
+})
+
+ipcMain.on('state', (event, port) => {
+   console.log('port:state: ' + port)
+
+
+   if (mainWindow)
+      mainWindow.webContents.send('port:state', {
+         port: port,
+         pid: children[port] ? children[port].pid : null,
+         data: data[port] || []
+      })
+})
+
+ipcMain.on('close', (event, port, signal) => {
+   console.log('port:close: ' + port)
+
+   if (children[port]) {
+      children[port].kill(signal || "SIGTERM")
+      event.returnValue = children[port].pid
+   } else {
+      event.returnValue = null
+   }
+
+})
+

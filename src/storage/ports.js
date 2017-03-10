@@ -1,33 +1,109 @@
-import processes from 'child_process'
+import {ipcRenderer, remote} from 'electron'
 import _ from 'lodash'
 
 import BaseStore from './base'
 import Dispatcher from './dispatcher'
+import {ConnectionStore} from './connection'
 
-export class PortsAPI {
-   static list() {
-      const ports = processes.spawnSync('./tm-serial-adapter', ['-list'], {encoding: 'ascii'})
 
-      return ports.output[1]
-         .split(/[\r\n]/)
-         .filter((buf) => !!buf)
+class Ports {
+   get ACTIONS() {
+      return {
+         ports: {
+            list: 'port:list',
+         },
+
+         conn: {
+            state: 'port:state',
+            open:  'port:open',
+            close: 'port:close',
+            error: 'port:error',
+            data:  'port:data',
+         }
+      }
    }
 
-   static open(port) {
-      console.log('PortsAPI: open', port)
+   constructor() {
+      ipcRenderer.on(this.ACTIONS.ports.list, (ev, {ports, added, removed}) => {
+         console.log('list ports??')
+         Dispatcher.dispatch({
+            action: this.ACTIONS.ports.list,
+            ports,
+            added,
+            removed})
+      })
+
+      ipcRenderer.on(this.ACTIONS.conn.open, (ev, {pid, port, data}) =>
+         Dispatcher.dispatch({
+            action: this.ACTIONS.conn.open,
+            port,
+            data,
+            pid
+         })
+      )
+
+      ipcRenderer.on(this.ACTIONS.conn.close, (ev, {port, pid, error}) =>
+         Dispatcher.dispatch({
+            action: this.ACTIONS.conn.close,
+            port,
+            pid,
+            error
+         })
+      )
+
+      ipcRenderer.on(this.ACTIONS.conn.error, (ev, {port, pid, error}) =>
+         Dispatcher.dispatch({
+            action: this.ACTIONS.conn.error,
+            port,
+            pid,
+            error
+         })
+      )
+
+      ipcRenderer.on(this.ACTIONS.conn.state, (ev, {port, pid, data}) =>
+         Dispatcher.dispatch({
+            action: this.ACTIONS.conn.state,
+            port,
+            pid,
+            data
+         })
+      )
+
+      ipcRenderer.on(this.ACTIONS.conn.data, (ev, {port, pid, fd, data}) =>
+         Dispatcher.dispatch({
+            action: this.ACTIONS.conn.data,
+            port,
+            pid,
+            fd,
+            data
+         })
+      )
    }
 
-   static close(port) {
-      console.log('PortsAPI: close', port)
+   list() {
+      return ipcRenderer.sendSync('list')
    }
+
+   open(port) {
+      return ipcRenderer.sendSync('open', port)
+   }
+
+   close(port) {
+      return ipcRenderer.sendSync('close', port)
+   }
+
+   state(port) {
+      ipcRenderer.send('state', port)
+   }
+
 }
+
+const PortsAPI = new Ports()
+
+export {PortsAPI}
 
 // storage of ports
 class PortsStore extends BaseStore {
-   static get ACTION() {
-      return 'ports:change'
-   }
-
    constructor() {
       super()
 
@@ -37,31 +113,17 @@ class PortsStore extends BaseStore {
       this._added = []
       this._removed = []
 
-      this._interval = setInterval(function() {
-         const
-            newports = PortsAPI.list(),
-            added = _.difference(newports, this._ports),
-            removed = _.difference(this._ports, newports)
-
-         if (added.length > 0 || removed.length > 0) {
-            Dispatcher.dispatch({
-               action: PortsStore.ACTION,
-               ports: newports,
-               added,
-               removed
-            })
-         }
-      }.bind(this), 1500)
 
    }
 
    _subscribe(action) {
-      console.log('action', action)
-      if (PortsStore.ACTION === action.action) {
-         this._ports = action.ports
-         this._added = action.added
-         this._removed = action.removed
-         this.emitChange()
+      switch (action.action) {
+         case PortsAPI.ACTIONS.ports.list:
+            console.log('ports', action)
+            this._ports = action.ports
+            this._added = action.added
+            this._removed = action.removed
+            this.emitChange()
       }
    }
 

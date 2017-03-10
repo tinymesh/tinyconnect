@@ -53,3 +53,14 @@ button.button-link {
    line-height: inherit;
    border-radius: 0;
 }
+
+.header {
+   position: relative;
+}
+
+.header span.right {
+   position: absolute;
+   top: 0;
+   margin-top: 10px;
+   right: 0;
+}
