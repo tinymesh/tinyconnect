@@ -75,7 +75,7 @@ export class PortView extends React.Component {
             </div>
 
             <div className="header">
-               <h4>{port}</h4>
+               <h4>{port.path}</h4>
 
 {/*
                <span className="right">
@@ -158,10 +158,10 @@ export class PortSelector extends React.Component {
                      <li key={idx} className="list-group-item">
                         <button
                            className={(this.isNew(p) ? 'new' : '') + " button-link"}
-                           value={p}
+                           value={p.path}
                            onClick={this.pickPort}>
 
-                           {p} {connected(p) ? ' — Connected' : ''}
+                           {p.path} {connected(p) ? ' — Connected' : ''}
                         </button>
                      </li>)}
                </ul>
@@ -170,4 +170,3 @@ export class PortSelector extends React.Component {
       }
    }
 }
-

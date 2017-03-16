@@ -25,7 +25,6 @@ class Ports {
 
    constructor() {
       ipcRenderer.on(this.ACTIONS.ports.list, (ev, {ports, added, removed}) => {
-         console.log('list ports??')
          Dispatcher.dispatch({
             action: this.ACTIONS.ports.list,
             ports,
@@ -119,7 +118,6 @@ class PortsStore extends BaseStore {
    _subscribe(action) {
       switch (action.action) {
          case PortsAPI.ACTIONS.ports.list:
-            console.log('ports', action)
             this._ports = action.ports
             this._added = action.added
             this._removed = action.removed
@@ -147,5 +145,3 @@ class PortsStore extends BaseStore {
 const Storage = new PortsStore()
 
 export {Storage as PortsStore}
-
-

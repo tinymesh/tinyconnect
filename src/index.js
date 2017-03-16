@@ -3,6 +3,7 @@ import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-insta
 import { enableLiveReload } from 'electron-compile'
 import processes from 'child_process'
 import _ from 'lodash'
+import guri from './guri.js'
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -59,24 +60,30 @@ app.on('activate', () => {
   }
 });
 
-
 // Processes spawned in rendere are not killed when the application exists
 // Handle such communication in main thread instead to get them to exit
-ipcMain.on('async', (event, arg) => {
-    // Print 1
-    console.log(arg);
-    // Reply on async message from renderer process
-    event.sender.send('async-reply', 2);
-});
-
 let listPorts = () => {
-   const ports = processes
-                  .spawnSync('./tm-serial-adapter',
+   const call = processes
+                  .spawnSync(guri.executable,
                              ['-list'],
                              {encoding: 'ascii'})
 
-   return ports.output[1].split(/[\r\n]/)
-                         .filter(buf => !!buf)
+   const lines = call.output[1].split(/[\r\n]/)
+                               .filter(buf => !!buf)
+   let ports
+
+   ports = _.reduce(lines, (acc, line) => {
+     let port = _.reduce(
+       line.split(/\s/),
+       (acc1, pair) => {
+         let [k ,v] = pair.split(/=/)
+         return _.set(acc1, k || "path", v)
+       },
+       {})
+    return acc.concat([port])
+  }, [])
+
+  return ports
 }
 
 ipcMain.on('list', (event) => {
@@ -106,7 +113,7 @@ let children = {}
 let data = {}
 
 const spawn = (port) => {
-   let proc = processes.spawn('./tm-serial-adapter',
+   let proc = processes.spawn(guri.executable,
                               [port],
                               { encoding: 'ascii' }),
        opened = false,
@@ -208,4 +215,3 @@ ipcMain.on('close', (event, port, signal) => {
    }
 
 })
-
